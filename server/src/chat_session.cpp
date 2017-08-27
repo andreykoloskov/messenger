@@ -53,7 +53,10 @@ chat_session::do_read_body()
                 if (!ec)
                 {
                     if (read_msg_.get_type() == "authorization")
+                    {
                         login_ = read_msg_.get_from();
+                        room_.first_deliver(shared_from_this());
+                    }
 
                     room_.deliver(read_msg_);
                     do_read_header();
