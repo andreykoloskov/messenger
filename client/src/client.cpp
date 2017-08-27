@@ -1,42 +1,60 @@
-#include <iostream>
-#include <boost/array.hpp>
-#include <boost/asio.hpp>
-
-using boost::asio::ip::tcp;
+#include "client.h"
+#include "chat_client.h"
 
 int main(int argc, char* argv[])
 {
   try
   {
-    if (argc < 3)
+    if (argc != 4)
     {
-      std::cerr << "Usage: client <port> <host>" << std::endl;
+      std::cerr << "Usage: chat_client <name> <host> <port>\n";
       return 1;
     }
 
     boost::asio::io_service io_service;
-    tcp::endpoint endpoint(boost::asio::ip::address::from_string(argv[1]), atoi(argv[2]));
-    tcp::socket socket(io_service);
-    socket.connect(endpoint);
 
-    for (;;)
+    tcp::resolver resolver(io_service);
+    auto endpoint_iterator = resolver.resolve({ argv[2], argv[3] });
+    chat_client c(io_service, endpoint_iterator, argv[1]);
+
+    std::thread t([&io_service](){ io_service.run(); });
+
+    chat_message login_msg;
+    login_msg.set_from(c.get_client_name());
+    login_msg.set_to(c.get_client_name());
+    login_msg.set_type("authorization");
+    login_msg.body_length(std::strlen("authorized"));
+    std::memcpy(login_msg.body(), "authorized", login_msg.body_length());
+    login_msg.encode_header();
+    c.write(login_msg);
+
+    char line[chat_message::max_body_length + 1];
+    while (std::cin.getline(line, chat_message::max_body_length + 1))
     {
-      boost::array<char, 128> buf;
-      boost::system::error_code error;
+      chat_message msg;
+      msg.set_from(c.get_client_name());
 
-      size_t len = socket.read_some(boost::asio::buffer(buf), error);
+      char *line_body = strchr(line, ':');
+      if (!line_body)
+          continue;
 
-      if (error == boost::asio::error::eof)
-        break; // Connection closed cleanly by peer.
-      else if (error)
-        throw boost::system::system_error(error); // Some other error.
+      std::string to(line, line_body - line);
+      msg.set_to(to);
+      line_body++;
 
-      std::cout.write(buf.data(), len);
+      msg.set_type("regular");
+      msg.body_length(std::strlen(line_body));
+      std::memcpy(msg.body(), line_body, msg.body_length());
+      msg.encode_header();
+      c.write(msg);
     }
+
+    c.close();
+    t.join();
   }
   catch (std::exception& e)
   {
-    std::cerr << e.what() << std::endl;
+    std::cerr << "Exception: " << e.what() << "\n";
   }
 
   return 0;

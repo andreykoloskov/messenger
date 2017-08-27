@@ -1,114 +1,37 @@
-#include <ctime>
-#include <iostream>
-#include <string>
-#include <boost/bind.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/enable_shared_from_this.hpp>
-#include <boost/asio.hpp>
+#include "server.h"
+#include "chat_server.h"
+#include "chat_session.h"
+#include "chat_room.h"
+#include "chat_participant.h"
 
 using boost::asio::ip::tcp;
 
-std::string make_daytime_string()
+int main(int argc, char* argv[])
 {
-  using namespace std; // For time_t, time and ctime;
-  time_t now = time(0);
-  return ctime(&now);
-}
-
-class tcp_connection
-  : public boost::enable_shared_from_this<tcp_connection>
-{
-public:
-  typedef boost::shared_ptr<tcp_connection> pointer;
-
-  static pointer create(boost::asio::io_service& io_service)
+  try
   {
-    return pointer(new tcp_connection(io_service));
-  }
-
-  tcp::socket& socket()
-  {
-    return socket_;
-  }
-
-  void start()
-  {
-    message_ = make_daytime_string();
-
-    boost::asio::async_write(socket_, boost::asio::buffer(message_),
-        boost::bind(&tcp_connection::handle_write, shared_from_this(),
-          boost::asio::placeholders::error,
-          boost::asio::placeholders::bytes_transferred));
-  }
-
-private:
-  tcp_connection(boost::asio::io_service& io_service)
-    : socket_(io_service)
-  {
-  }
-
-  void handle_write(const boost::system::error_code& /*error*/,
-      size_t /*bytes_transferred*/)
-  {
-  }
-
-  tcp::socket socket_;
-  std::string message_;
-};
-
-class tcp_server
-{
-public:
-  tcp_server(boost::asio::io_service& io_service, int port)
-    : acceptor_(io_service, tcp::endpoint(tcp::v4(), port))
-  {
-    start_accept();
-  }
-
-private:
-  void start_accept()
-  {
-    tcp_connection::pointer new_connection =
-      tcp_connection::create(acceptor_.get_io_service());
-
-    acceptor_.async_accept(new_connection->socket(),
-        boost::bind(&tcp_server::handle_accept, this, new_connection,
-          boost::asio::placeholders::error));
-  }
-
-  void handle_accept(tcp_connection::pointer new_connection,
-      const boost::system::error_code& error)
-  {
-    if (!error)
-    {
-      new_connection->start();
-    }
-
-    start_accept();
-  }
-
-  tcp::acceptor acceptor_;
-};
-
-int
-main(int argc, char **argv)
-{
     if (argc < 2)
     {
-        std::cerr << "server <port>" << std::endl;
-        return 0;
+      std::cerr << "Usage: chat_server <port> [<port> ...]\n";
+      return 1;
     }
 
-    try
+    boost::asio::io_service io_service;
+
+    std::list<chat_server> servers;
+    for (int i = 1; i < argc; ++i)
     {
-        boost::asio::io_service io_service;
-        tcp_server server(io_service, atoi(argv[1]));
-        io_service.run();
-    }
-    catch (std::exception& e)
-    {
-        std::cerr << e.what() << std::endl;
+      tcp::endpoint endpoint(tcp::v4(), std::atoi(argv[i]));
+      servers.emplace_back(io_service, endpoint);
     }
 
-    return 0;
+    io_service.run();
+  }
+  catch (std::exception& e)
+  {
+    std::cerr << "Exception: " << e.what() << "\n";
+  }
+
+  return 0;
 }
+
