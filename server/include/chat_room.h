@@ -12,9 +12,18 @@ typedef std::deque<chat_message> chat_message_queue;
 class chat_room
 {
 public:
-    void join(chat_participant_ptr participant);
+    void join(chat_participant_ptr participant)
+    {
+        participants_.insert(participant);
+    }
+
     void first_deliver(chat_participant_ptr participant);
-    void leave(chat_participant_ptr participant);
+
+    void leave(chat_participant_ptr participant)
+    {
+        participants_.erase(participant);
+    }
+
     void deliver(const chat_message& msg);
 
 private:

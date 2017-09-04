@@ -4,22 +4,10 @@
 using boost::asio::ip::tcp;
 
 void
-chat_room::join(chat_participant_ptr participant)
-{
-    participants_.insert(participant);
-}
-
-void
 chat_room::first_deliver(chat_participant_ptr participant)
 {
     for (auto msg: recent_msgs_)
         participant->deliver(msg);
-}
-
-void
-chat_room::leave(chat_participant_ptr participant)
-{
-    participants_.erase(participant);
 }
 
 void

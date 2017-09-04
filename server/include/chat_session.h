@@ -12,13 +12,19 @@ class chat_session:
         public std::enable_shared_from_this<chat_session>
 {
 public:
-    chat_session(tcp::socket socket, chat_room& room);
-    void start();
+    chat_session(tcp::socket socket, chat_room& room):
+            socket_(std::move(socket)), room_(room) {}
+
+    void start()
+    {
+        room_.join(shared_from_this());
+        do_read();
+    }
+
     void deliver(const chat_message& msg);
 
 private:
-    void do_read_header();
-    void do_read_body();
+    void do_read();
     void do_write();
 
   tcp::socket socket_;

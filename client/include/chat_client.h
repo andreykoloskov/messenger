@@ -13,15 +13,20 @@ class chat_client
 public:
     chat_client(boost::asio::io_service& io_service,
                 tcp::resolver::iterator endpoint_iterator,
-                std::string client_name);
+                std::string client_name):
+            io_service_(io_service), socket_(io_service),
+            client_name_(client_name)
+    {
+        do_connect(endpoint_iterator);
+    }
+
     void write(const chat_message& msg);
-    std::string get_client_name();
-    void close();
+    std::string get_client_name() { return client_name_; }
+    void close() { io_service_.post([this]() { socket_.close(); }); }
 
 private:
     void do_connect(tcp::resolver::iterator endpoint_iterator);
-    void do_read_header();
-    void do_read_body();
+    void do_read();
     void do_write();
 
     boost::asio::io_service& io_service_;

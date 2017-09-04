@@ -3,22 +3,11 @@
 
 using boost::asio::ip::tcp;
 
-chat_session::chat_session(tcp::socket socket, chat_room& room)
-        : socket_(std::move(socket)), room_(room) {}
-
-void
-chat_session::start()
-{
-    room_.join(shared_from_this());
-    do_read_header();
-}
-
 void
 chat_session::deliver(const chat_message& msg)
 {
     if (msg.get_to() != login_)
         return;
-
     bool write_in_progress = !write_msgs_.empty();
     write_msgs_.push_back(msg);
     if (!write_in_progress)
@@ -26,31 +15,15 @@ chat_session::deliver(const chat_message& msg)
 }
 
 void
-chat_session::do_read_header()
+chat_session::do_read()
 {
     auto self(shared_from_this());
-    boost::asio::async_read(socket_,
-            boost::asio::buffer(read_msg_.data(),
-                    chat_message::header_length),
-            [this, self](boost::system::error_code ec, std::size_t)
+    async_read(socket_,
+            boost::asio::buffer(read_msg_.get_buffer(),
+                    chat_message::MSG_LENGTH),
+            [this](boost::system::error_code ec, std::size_t size)
             {
-                if (!ec && read_msg_.decode_header())
-                    do_read_body();
-                else
-                    room_.leave(shared_from_this());
-            });
-}
-
-void
-chat_session::do_read_body()
-{
-    auto self(shared_from_this());
-    boost::asio::async_read(socket_,
-            boost::asio::buffer(read_msg_.body(),
-                    read_msg_.body_length()),
-            [this, self](boost::system::error_code ec, std::size_t)
-            {
-                if (!ec)
+                if (!ec && read_msg_.decode())
                 {
                     if (read_msg_.get_type() == "authorization")
                     {
@@ -59,7 +32,7 @@ chat_session::do_read_body()
                     }
 
                     room_.deliver(read_msg_);
-                    do_read_header();
+                    do_read();
                 }
                 else
                     room_.leave(shared_from_this());
@@ -70,9 +43,9 @@ void
 chat_session::do_write()
 {
     auto self(shared_from_this());
-    boost::asio::async_write(socket_,
-            boost::asio::buffer(write_msgs_.front().data(),
-                    write_msgs_.front().length()),
+    async_write(socket_,
+            boost::asio::buffer(write_msgs_.front().get_buffer(),
+                    chat_message::MSG_LENGTH),
             [this, self](boost::system::error_code ec, std::size_t)
             {
                 if (!ec)
